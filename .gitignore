@@ -3,3 +3,6 @@
 keys/
 
 .env
+
+config.json
+

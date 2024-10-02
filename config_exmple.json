@@ -1,0 +1,6 @@
+{
+    "key_file_path": "/path/to/default/key.p8",
+    "team_id": "default_team_id",
+    "key_id": "default_key_id",
+    "topic": "com.default.app.bundle.id"
+}
