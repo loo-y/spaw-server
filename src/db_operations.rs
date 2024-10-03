@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 lazy_static! {
     static ref DB: sled::Db = {
-        let db_path = Path::new("user-device.db");
+        let db_path = Path::new("user-device");
         let config = Config::new().path(db_path);
         config.open().expect("Failed to open/create database")
     };

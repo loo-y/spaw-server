@@ -7,3 +7,7 @@ keys/
 config.json
 
 user-device.db
+
+user-device/
+
+.DS_Store
