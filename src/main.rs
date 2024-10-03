@@ -7,6 +7,9 @@ use a2::{
     client::ClientConfig, Client, DefaultNotificationBuilder, Endpoint, NotificationBuilder, NotificationOptions,
 };
 use serde::{Deserialize, Serialize};
+// use sled::Config;
+mod db_operations;
+
 // use dotenv::dotenv;
 // use std::env;
 
@@ -35,18 +38,11 @@ struct Cli {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct Config {
+struct SPawConfig {
     key_file_path: String,
     team_id: String,
     key_id: String,
     topic: String,
-}
-
-
-#[derive(Deserialize)]
-struct PushMessage {
-    device_token: String,
-    body: String,
 }
 
 #[derive(Serialize)]
@@ -58,17 +54,18 @@ struct PushResponse {
 // 新增用于接收推送信息的结构体
 #[derive(Deserialize)]
 struct PushInfo {
-    device_token: String,
+    // device_token: String,
+    user_token: String,
     message: String,
     sandbox: bool
 }
 
-fn load_config(cli: &Cli) -> Config {
+fn load_config(cli: &Cli) -> SPawConfig {
     // 首先尝试从指定的配置文件或默认的 config.json 加载
     let mut config = cli.config.as_ref()
         .map(|path| read_config_file(path))
         .unwrap_or_else(|| read_config_file("config.json"))
-        .unwrap_or_else(|_| Config {
+        .unwrap_or_else(|_| SPawConfig {
             key_file_path: String::new(),
             team_id: String::new(),
             key_id: String::new(),
@@ -93,11 +90,11 @@ fn load_config(cli: &Cli) -> Config {
 }
 
 
-fn read_config_file<P: AsRef<Path>>(path: P) -> Result<Config, Box<dyn std::error::Error>> {
+fn read_config_file<P: AsRef<Path>>(path: P) -> Result<SPawConfig, Box<dyn std::error::Error>> {
     let mut file = File::open(path)?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
-    let config: Config = serde_json::from_str(&contents)?;
+    let config: SPawConfig = serde_json::from_str(&contents)?;
     Ok(config)
 }
 
@@ -105,15 +102,6 @@ fn read_config_file<P: AsRef<Path>>(path: P) -> Result<Config, Box<dyn std::erro
 #[get("/")]
 async fn hello() -> impl Responder {
     HttpResponse::Ok().body("Hello world!")
-}
-
-#[post("/pushmessage")]
-async fn push_message(msg: web::Json<PushMessage>) -> impl Responder {
-    // 这里处理推送逻辑，比如调用APNs推送
-    println!("Received token: {} with message: {}", msg.device_token, msg.body);
-    
-    // 返回成功响应
-    HttpResponse::Ok().body("Message received and sent to APNs")
 }
 
 #[get("/health")]
@@ -126,7 +114,7 @@ async fn health_check() -> impl Responder {
 
 
 #[post("/send_push")]
-async fn send_push(push_info: web::Json<PushInfo>, config: web::Data<Config>) -> HttpResponse {
+async fn send_push(push_info: web::Json<PushInfo>, config: web::Data<SPawConfig>) -> HttpResponse {
 
     // 读取环境变量
     // let key_file = env::var("KEY_FILE_PATH").expect("KEY_FILE_PATH not set");
@@ -176,7 +164,20 @@ async fn send_push(push_info: web::Json<PushInfo>, config: web::Data<Config>) ->
         ..Default::default()
     };
 
-    let payload = builder.build(&push_info.device_token, options);
+    // 从数据库获取设备令牌
+    let device_token = match db_operations::get_device_token(web::Json(push_info.user_token.clone())).await {
+        Some(token) => token,
+        None => return HttpResponse::InternalServerError().json("无法获取设备令牌"),
+    };
+
+    // 检查设备令牌是否存在
+    if device_token.is_empty() {
+        return HttpResponse::NotFound().json("未找到与用户令牌关联的设备");
+    }
+
+    println!("获取到的设备令牌: {}", device_token);
+
+    let payload = builder.build(&device_token, options);
 
     // 发送通知
     match client.send(payload).await {
@@ -196,6 +197,9 @@ async fn send_push(push_info: web::Json<PushInfo>, config: web::Data<Config>) ->
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // dotenv().ok(); // 确保环境变量已加载
+    // let db_path = Path::new("user-device.db");
+    // let sled_config = Config::new().path(db_path);  // 使用 Config 设置路径
+    // let sled_db = sled_config.open().expect("Failed to open/create database");
 
     let cli = Cli::parse();
     let config = load_config(&cli);
@@ -203,10 +207,15 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(config.clone()))
+            .service(db_operations::register_device)
             .service(send_push)
             .service(health_check)
             .service(hello)
-            .service(push_message) // 注册推送消息的路由
+            .service(db_operations::push_message) // 注册推送消息的路由
+            .service(
+                web::resource("/remove/{device_token}")
+                    .route(web::delete().to(db_operations::remove_device)),
+            )
     })
     .bind("0.0.0.0:8080")? // 监听所有IP地址的8080端口
     .run()
