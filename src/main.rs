@@ -55,7 +55,7 @@ struct PushResponse {
 #[derive(Deserialize)]
 struct PushInfo {
     // device_token: String,
-    user_token: String,
+    user_token: Option<String>,
     message: String,
     sandbox: bool
 }
@@ -113,9 +113,16 @@ async fn health_check() -> impl Responder {
 }
 
 
-#[post("/send_push")]
-async fn send_push(push_info: web::Json<PushInfo>, config: web::Data<SPawConfig>) -> HttpResponse {
+#[post("/push/{user_token}")]
+async fn send_push(user_token: web::Path<String>,push_info: web::Json<PushInfo>, config: web::Data<SPawConfig>) -> HttpResponse {
 
+    // 从URL路径中获取user_token
+    let user_token = user_token.into_inner();
+
+    // 更新PushInfo结构体中的user_token
+    let mut push_info = push_info.into_inner();
+    push_info.user_token = Some(user_token);
+    
     // 读取环境变量
     // let key_file = env::var("KEY_FILE_PATH").expect("KEY_FILE_PATH not set");
     // let team_id = env::var("TEAM_ID").expect("TEAM_ID not set");
@@ -165,9 +172,12 @@ async fn send_push(push_info: web::Json<PushInfo>, config: web::Data<SPawConfig>
     };
 
     // 从数据库获取设备令牌
-    let device_token = match db_operations::get_device_token(web::Json(push_info.user_token.clone())).await {
-        Some(token) => token,
-        None => return HttpResponse::InternalServerError().json("无法获取设备令牌"),
+    let device_token = match &push_info.user_token {
+        Some(user_token) => match db_operations::get_device_token(web::Json(user_token.clone())).await {
+            Some(token) => token,
+            None => return HttpResponse::NotFound().json("未找到与用户令牌关联的设备"),
+        },
+        None => return HttpResponse::BadRequest().json("未提供用户令牌"),
     };
 
     // 检查设备令牌是否存在

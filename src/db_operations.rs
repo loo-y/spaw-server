@@ -19,7 +19,7 @@ pub struct DeviceInfo {
     user_token: String,
 }
 
-#[post("/register")]
+#[post("/save_token")]
 pub async fn register_device(
     info: web::Json<DeviceInfo>,
 ) -> impl Responder {
