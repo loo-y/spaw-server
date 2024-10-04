@@ -57,7 +57,8 @@ struct PushInfo {
     // device_token: String,
     user_token: Option<String>,
     message: String,
-    sandbox: bool
+    sandbox: bool,
+    category: Option<String>, // 新增 category 字段
 }
 
 fn load_config(cli: &Cli) -> SPawConfig {
@@ -161,10 +162,24 @@ async fn send_push(user_token: web::Path<String>,push_info: web::Json<PushInfo>,
     };
 
     // 构建通知
-    let builder = DefaultNotificationBuilder::new()
+    let mut builder = DefaultNotificationBuilder::new()
         .set_body(&push_info.message)
         .set_sound("default")
-        .set_badge(1u32);
+        .set_title("消息")
+        .set_badge(1u32)
+        .set_mutable_content(); // 添加这行来设置 mutable-content 标志
+
+    // 检查是否需要设置 category
+    if let Some(category) = &push_info.category {
+        builder = builder.set_category(category);
+    }else{
+        builder = builder.set_category("QUICK_ACTIONS_CATEGORY")
+    }
+    
+    // // 检查是否需要设置 category
+    // if let Some(category) = push_info.category { // 假设 PushInfo 结构体中新增了 category 字段
+    //     builder = builder.set_category(&category);
+    // }
 
     let options = NotificationOptions {
         apns_topic: Some(&topic),
@@ -187,7 +202,14 @@ async fn send_push(user_token: web::Path<String>,push_info: web::Json<PushInfo>,
 
     println!("获取到的设备令牌: {}", device_token);
 
-    let payload = builder.build(&device_token, options);
+    let mut payload = builder.build(&device_token, options);
+    // 添加自定义数据
+    if let Err(e) = payload.add_custom_data("text_to_copy", &push_info.message) {
+        return HttpResponse::InternalServerError().json(PushResponse {
+            success: false,
+            message: format!("添加自定义数据失败: {}", e),
+        });
+    }
 
     // 发送通知
     match client.send(payload).await {
