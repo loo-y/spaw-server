@@ -1,0 +1,47 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install Rust toolchain
+      uses: actions/setup-rust@v3
+      with:
+        toolchain: stable # 可根据需要修改为 nightly 或特定版本
+        target: x86_64-unknown-linux-gnu # 根据需要修改目标平台
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+    - name: Build release
+      run: cargo build --release
+    - name: Upload artifact (optional)
+      uses: actions/upload-artifact@v3
+      if: success() # 仅在构建成功时上传
+      with:
+        name: release-binary
+        path: target/release/${{ matrix.target }} # 根据你的项目调整路径
+    - name: Release to GitHub Releases (optional)
+      uses: softprops/action-gh-release@v1
+      with:
+        files: | # 根据你的项目调整路径
+          target/release/${{ matrix.target }}
+        tag_name: ${{ github.ref }}
+        generate_release_notes: true  # 自动生成发布说明
