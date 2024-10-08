@@ -15,12 +15,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Install Rust toolchain
-      uses: actions/setup-rust@v3
-      with:
-        toolchain: stable # 可根据需要修改为 nightly 或特定版本
-        target: x86_64-unknown-linux-gnu # 根据需要修改目标平台
+    - uses: actions/checkout@v4
+    # - name: Install Rust toolchain
+    #   uses: actions/setup-rust@v3
+    #   with:
+    #     toolchain: stable # 可根据需要修改为 nightly 或特定版本
+    #     target: x86_64-unknown-linux-gnu # 根据需要修改目标平台
     - name: Cache dependencies
       uses: actions/cache@v3
       with:
