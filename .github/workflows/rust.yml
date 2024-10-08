@@ -37,11 +37,15 @@ jobs:
       if: success() # 仅在构建成功时上传
       with:
         name: release-binary
-        path: target/release/${{ matrix.target }} # 根据你的项目调整路径
+        # path: target/release/${{ matrix.target }} # 根据你的项目调整路径
+        path: /home/runner/work/spaw-server/spaw-server
     - name: Release to GitHub Releases (optional)
       uses: softprops/action-gh-release@v1
       with:
-        files: | # 根据你的项目调整路径
-          target/release/${{ matrix.target }}
-        tag_name: ${{ github.ref }}
+        # files: | # 根据你的项目调整路径
+        #   /target/release/${{ matrix.target }}
+        files: |
+          /home/runner/work/spaw-server/spaw-server
+        # tag_name: ${{ github.ref }}
+        tag_name: "v$(date +%Y%m%d%H%M%S)"
         generate_release_notes: true  # 自动生成发布说明
